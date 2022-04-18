@@ -256,6 +256,7 @@ static switch_status_t load_config()
 	}
 
 	if ((settings = switch_xml_child(cfg, "settings"))) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "[Carbyne] [INFO] settings entered default value %d \n",globals.fire_event);
 		for (param = switch_xml_child(settings, "param"); param; param = param->next) {
 			char *var = (char *) switch_xml_attr_soft(param, "name");
 			char *val = (char *) switch_xml_attr_soft(param, "value");
