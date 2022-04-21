@@ -35,7 +35,7 @@
 #include <switch_stun.h>
 
 #define MSRP_BUFF_SIZE (SWITCH_RTP_MAX_BUF_LEN - 32)
-#define DEBUG_MSRP 1
+#define DEBUG_MSRP 0
 #define MSRP_TRANSACTION_ID_LEN 100
 #define MSRP_LOOP_COUNT 20
 
@@ -84,7 +84,7 @@ typedef struct worker_helper{
 
 SWITCH_DECLARE(void) switch_msrp_msg_set_payload(switch_msrp_msg_t *msrp_msg, const char *buf, switch_size_t payload_bytes)
 {
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "MSRP message set_payload executed begin.... \n");
+	if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "MSRP message set_payload executed begin.... \n");
 	if (!msrp_msg->payload) {
 		switch_malloc(msrp_msg->payload, payload_bytes + 1);
 	} else if (msrp_msg->payload_bytes < payload_bytes + 1) {
@@ -122,20 +122,20 @@ SWITCH_DECLARE(void)switch_msrp_msg_generate_event(switch_msrp_msg_t *msrp_msg)
         const char *type_text_html = "text/html";
         const char *type_message_cpim = "message/cpim";
         const char *msrp_content_type = switch_msrp_msg_get_header(msrp_msg, MSRP_H_CONTENT_TYPE);
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP content type is   :::::::: %s :: \n", msrp_content_type);
+        if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP content type is   :::::::: %s :: \n", msrp_content_type);
 
 
         if (msrp_find_uuid(uuid, switch_msrp_msg_get_header(msrp_msg, MSRP_H_TO_PATH)) != SWITCH_TRUE) {
-               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid MSRP to-path!\n");
+               if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid MSRP to-path!\n");
         } else {
-               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP CALL UUID : %s\n",uuid);
+               if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP CALL UUID : %s\n",uuid);
         }
         if (switch_event_create_subclass(&msrp_event, SWITCH_EVENT_CUSTOM, MY_EVENT_MSRP_RECV_MESSAGE) == SWITCH_STATUS_SUCCESS ) {
                if (msrp_msg->payload && msrp_content_type && ((strstr(msrp_content_type,type_text_plain) != NULL) || (strstr(msrp_content_type,type_text_html) != NULL) || (strstr(msrp_content_type,type_message_cpim) != NULL))) {
                         switch_event_add_header_string(msrp_event, SWITCH_STACK_BOTTOM, "Unique-ID", uuid);
                         switch_event_add_header_string(msrp_event, SWITCH_STACK_BOTTOM, "MSRP-Data", msrp_msg->payload);
                         switch_event_fire(&msrp_event);
-                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP event fired \n");
+                        if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP event fired \n");
 				}
         }
         switch_event_destroy(&msrp_event);
@@ -276,7 +276,7 @@ static switch_status_t load_config()
 				if (globals.message_buffer_size == 0) globals.message_buffer_size = 50;
 			} else if (!strcasecmp(var, "fire-event")) {
 			        globals.fire_event = switch_true(val);
-                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Fire_event value %d \n", globals.fire_event);
+                        if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Fire_event value %d \n", globals.fire_event);
 			}
 		}
 	}
@@ -1297,12 +1297,12 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 					strcpy(transaction_id, token);
 					strcat(transaction_prefix, transaction_id);
 					delimiter = strcat(transaction_prefix, "$");
-					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP message delimiter is : %s \n", delimiter);
+				        if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP message delimiter is : %s \n", delimiter);
 				}
 			}
 			// Break the loop if new segment has delimiter
 			if (!zstr(delimiter) && strstr(buf, delimiter)) {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Got the last message segment with delimiter. \n");
+				if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Got the last message segment with delimiter. \n");
 				break;
 			}
 			// Empty temporary buffer
@@ -1310,11 +1310,11 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 			// Get next segment of MSRP message and store it in temporary buf
 			status = msrp_socket_recv(csock, new_buf, &len);
 			if (status != SWITCH_STATUS_SUCCESS) {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "MSRP Socket receive status is not SUCCESS \n");
+				if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "MSRP Socket receive status is not SUCCESS \n");
 				break;
 			}
 			dump_buffer(new_buf, len, __LINE__, 0);
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP current buffer : \n %s \n MSRP New Socket received buffer : \n %s \n", buf, new_buf);
+			if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "MSRP current buffer : \n %s \n MSRP New Socket received buffer : \n %s \n", buf, new_buf);
 			/* If a new MSRP message comes arrives, override the content in buf, otherwise it is the new fragment so append it to buf */
 			if (strstr(new_buf, "SEND")) {
 				strcpy(buf, new_buf);
