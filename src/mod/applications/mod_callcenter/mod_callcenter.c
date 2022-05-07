@@ -2747,6 +2747,7 @@ static int AGENT_DISPATCH_THREAD_STARTED = 0;
 void *SWITCH_THREAD_FUNC cc_agent_dispatch_thread_run(switch_thread_t *thread, void *obj)
 {
 	int done = 0;
+	int calls_unanswered_other_fs = 0;
 
 	switch_mutex_lock(globals.mutex);
 	if (!AGENT_DISPATCH_THREAD_RUNNING) {
@@ -2764,15 +2765,28 @@ void *SWITCH_THREAD_FUNC cc_agent_dispatch_thread_run(switch_thread_t *thread, v
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CONSOLE, "Agent Dispatch Thread Started\n");
 
 	while (globals.running == 1) {
-		char *sql = NULL;
-		sql = switch_mprintf("SELECT queue,uuid,session_uuid,cid_number,cid_name,joined_epoch,(%" SWITCH_TIME_T_FMT "-joined_epoch)+base_score+skill_score AS score, state, abandoned_epoch, serving_agent, instance_id FROM members"
-				" WHERE (state = '%q' OR state = '%q' OR (serving_agent = 'ring-all' AND state = '%q') OR (serving_agent = 'ring-progressively' AND state = '%q')) AND instance_id = '%q' ORDER BY score DESC",
-				local_epoch_time_now(NULL),
-				cc_member_state2str(CC_MEMBER_STATE_WAITING), cc_member_state2str(CC_MEMBER_STATE_ABANDONED), cc_member_state2str(CC_MEMBER_STATE_TRYING), cc_member_state2str(CC_MEMBER_STATE_TRYING), globals.cc_instance_id);
 
-		cc_execute_sql_callback(NULL /* queue */, NULL /* mutex */, sql, members_callback, NULL /* Call back variables */);
+		char *sql = NULL;
+		char res[256];
+		sql = switch_mprintf("SELECT count(queue) FROM members"
+		                " WHERE joined_epoch - base_score - skill_score = ( SELECT min(joined_epoch - base_score - skill_score) FROM members WHERE (state = '%q' OR (serving_agent = 'ring-all' AND state = '%q') OR (serving_agent = 'ring-progressively' AND state = '%q'))) AND instance_id != '%q'",
+		                cc_member_state2str(CC_MEMBER_STATE_WAITING), cc_member_state2str(CC_MEMBER_STATE_TRYING), cc_member_state2str(CC_MEMBER_STATE_TRYING), globals.cc_instance_id);
+		cc_execute_sql2str(NULL, NULL, sql, res, sizeof(res));
 		switch_safe_free(sql);
-		switch_yield(100000);
+		calls_unanswered_other_fs = atoi(res);
+
+		if (calls_unanswered_other_fs == 0) {
+
+		        char *sql = NULL;
+		        sql = switch_mprintf("SELECT queue,uuid,session_uuid,cid_number,cid_name,joined_epoch,(%" SWITCH_TIME_T_FMT "-joined_epoch)+base_score+skill_score AS score, state, abandoned_epoch, serving_agent, instance_id FROM members"
+					" WHERE (state = '%q' OR state = '%q' OR (serving_agent = 'ring-all' AND state = '%q') OR (serving_agent = 'ring-progressively' AND state = '%q')) AND instance_id = '%q' ORDER BY score DESC",
+					local_epoch_time_now(NULL),
+					cc_member_state2str(CC_MEMBER_STATE_WAITING), cc_member_state2str(CC_MEMBER_STATE_ABANDONED), cc_member_state2str(CC_MEMBER_STATE_TRYING), cc_member_state2str(CC_MEMBER_STATE_TRYING), globals.cc_instance_id);
+
+		        cc_execute_sql_callback(NULL /* queue */, NULL /* mutex */, sql, members_callback, NULL /* Call back variables */);
+		        switch_safe_free(sql);
+		        switch_yield(100000);
+                }
 	}
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CONSOLE, "Agent Dispatch Thread Ended\n");
@@ -3017,11 +3031,11 @@ SWITCH_STANDARD_APP(callcenter_function)
 	}
 
 	/* Make sure we answer the channel before getting the switch_channel_time_table_t answer time */
-	switch_channel_answer(member_channel);
-
+	//switch_channel_answer(member_channel);
 	/* Grab the start epoch of a channel */
+	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(member_session), SWITCH_LOG_INFO, "Queue [%s] is not answered from mod_callcenter\n", queue_name);
 	times = switch_channel_get_timetable(member_channel);
-	switch_snprintf(start_epoch, sizeof(start_epoch), "%" SWITCH_TIME_T_FMT, times->answered / 1000000);
+	switch_snprintf(start_epoch, sizeof(start_epoch), "%" SWITCH_TIME_T_FMT, times->created / 1000000);
 
 	/* Check if we support and have a queued abandoned member we can resume from */
 	if (queue->abandoned_resume_allowed == SWITCH_TRUE) {
