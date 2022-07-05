@@ -2817,8 +2817,11 @@ void sofia_glue_actually_execute_sql_trans(sofia_profile_t *profile, char *sql, 
 	if (!(dbh = sofia_glue_get_db_handle(profile))) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error Opening DB\n");
 
-		//goto end;
+	if (mod_sofia_globals.global_DB_lock) {
 		return;
+	} else {
+		goto end;
+	}
 	}
 
 	switch_cache_db_persistant_execute_trans_full(dbh, sql, 1,
@@ -2830,7 +2833,11 @@ void sofia_glue_actually_execute_sql_trans(sofia_profile_t *profile, char *sql, 
 
 	switch_cache_db_release_db_handle(&dbh);
 
- //end:
+	if (mod_sofia_globals.global_DB_lock) {
+		//end:
+	} else {
+		end:
+	}
 
 	if (mod_sofia_globals.global_DB_lock) {
 		if (mutex) {
