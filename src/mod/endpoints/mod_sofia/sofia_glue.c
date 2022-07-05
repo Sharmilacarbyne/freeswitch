@@ -2833,11 +2833,7 @@ void sofia_glue_actually_execute_sql_trans(sofia_profile_t *profile, char *sql, 
 
 	switch_cache_db_release_db_handle(&dbh);
 
-	if (mod_sofia_globals.global_DB_lock) {
-		//end:
-	} else {
-		end:
-	}
+ end:
 
 	if (mod_sofia_globals.global_DB_lock) {
 		if (mutex) {
